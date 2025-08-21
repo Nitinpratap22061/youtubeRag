@@ -11,4 +11,5 @@ sentence-transformers
 faiss-cpu
 pydantic
 openrouter
+langchain_openai
 
