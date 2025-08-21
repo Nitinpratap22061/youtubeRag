@@ -10,3 +10,5 @@ langchain-groq
 sentence-transformers
 faiss-cpu
 pydantic
+openrouter
+
