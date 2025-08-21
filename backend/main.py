@@ -15,6 +15,7 @@ from langchain_core.prompts import PromptTemplate
 from langchain_core.runnables import RunnableParallel, RunnableLambda, RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
 from langchain.schema import Document
+from langchain_openai import OpenAIEmbeddings
 
 # ---------------------------
 # Load env vars
@@ -34,7 +35,7 @@ MAX_CACHE = int(os.getenv("MAX_CACHE", "16"))
 # ---------------------------
 # Global instances
 # ---------------------------
-embeddings = HuggingFaceEmbeddings(model_name=EMBED_MODEL)
+embeddings = OpenRouterEmbeddings(model=EMBED_MODEL)
 llm = ChatGroq(groq_api_key=GROQ_API_KEY, model=GROQ_MODEL, temperature=0.2)
 
 prompt = PromptTemplate(
