@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "YouTube RAG Chat",
+  "version": "1.0",
+  "description": "Ask questions about the current YouTube video using your RAG backend.",
+  "permissions": ["activeTab", "scripting", "tabs"],
+  "host_permissions": [
+    "*://www.youtube.com/*",
+    "http://127.0.0.1:8000/*",
+    "http://localhost:8000/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "YouTube RAG"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://www.youtube.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
