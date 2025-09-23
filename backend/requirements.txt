@@ -1,24 +1,17 @@
-fastapi
-uvicorn[standard]
-python-dotenv
+fastapi==0.111.0
+uvicorn[standard]==0.30.1
+python-dotenv==1.0.1
 youtube-transcript-api==0.6.2
-
-# LangChain ecosystem (versions compatible with each other)
 langchain==0.2.14
 langchain-core==0.2.36
 langchain-text-splitters==0.2.2
 langchain-community==0.2.12
 langchain-groq==0.1.6
-langchain-cohere==0.4.6
-langchain-openai==0.1.17
-
-# Embeddings + Vector stores
-sentence-transformers==2.7.0
-faiss-cpu==1.8.0
+langchain-cohere==0.1.6
+pydantic==2.8.2
 pinecone-client==4.1.0
 
-# Pydantic (FastAPI compatibility)
-pydantic==1.10.15
-
-# Optional: routing / API
-openrouter
+# Optional dependencies for embeddings and vector storage
+# Replace these with the specific versions you have successfully installed
+sentence-transformers==2.7.0
+faiss-cpu==1.12.0
