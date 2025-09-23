@@ -7,9 +7,10 @@ langchain-core
 langchain-text-splitters
 langchain-community
 langchain-groq
+langchain-cohere
+langchain-openai
 sentence-transformers
 faiss-cpu
 pydantic
 openrouter
-langchain_openai
-
+pinecone-client
