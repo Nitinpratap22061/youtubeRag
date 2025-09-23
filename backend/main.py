@@ -23,7 +23,6 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain.schema import Document
 from pinecone import Pinecone as PineconeClient
 
-
 # ========== Load ENV ==========
 load_dotenv()
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
@@ -41,11 +40,9 @@ CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "200"))
 TOP_K = int(os.getenv("TOP_K", "4"))
 MAX_CACHE = int(os.getenv("MAX_CACHE", "16"))
 
-
 # ========== Embeddings + LLM ==========
 embeddings = CohereEmbeddings(model=EMBED_MODEL, cohere_api_key=COHERE_API_KEY)
 llm = ChatGroq(groq_api_key=GROQ_API_KEY, model=GROQ_MODEL, temperature=0.2)
-
 
 # ========== Prompt ==========
 prompt = PromptTemplate(
@@ -59,15 +56,12 @@ Question: {question}
     input_variables=["context", "question"],
 )
 
-
 # ========== Pinecone ==========
 pc = PineconeClient(api_key=PINECONE_API_KEY)
 index = pc.Index(PINECONE_INDEX)
 
-
 # ========== Cache ==========
 _vector_cache: Dict[str, Dict[str, Any]] = {}
-
 
 def _trim_cache():
     """Keep cache size under MAX_CACHE"""
@@ -76,31 +70,35 @@ def _trim_cache():
     oldest = sorted(_vector_cache.items(), key=lambda kv: kv[1]["at"])[0][0]
     _vector_cache.pop(oldest, None)
 
-
 # ========== Transcript Fetch ==========
 def fetch_transcript_text(video_id: str) -> str:
-    """Fetch transcript text for a given YouTube video ID"""
-    try:
-        snippets = YouTubeTranscriptApi.get_transcript(video_id)
-
-        parts = []
-        for sn in snippets:
-            if isinstance(sn, dict):
-                parts.append(sn.get("text", ""))
+    """Fetch transcript text for a given YouTube video ID with retry logic."""
+    retries = 3
+    delay = 2  # initial delay in seconds
+    for attempt in range(retries):
+        try:
+            snippets = YouTubeTranscriptApi.get_transcript(video_id)
+            
+            parts = [sn.get("text", "") if isinstance(sn, dict) else str(sn) for sn in snippets]
+            text = " ".join(p for p in parts if p).strip()
+            return text
+        
+        except TranscriptsDisabled:
+            raise HTTPException(status_code=400, detail="Transcript is disabled for this video.")
+        except NoTranscriptFound:
+            raise HTTPException(status_code=404, detail="No transcript found.")
+        except Exception as e:
+            # Check for the "Too Many Requests" error specifically
+            if "Too Many Requests" in str(e) and attempt < retries - 1:
+                print(f"Rate limited. Retrying in {delay} seconds...")
+                time.sleep(delay)
+                delay *= 2  # Exponential backoff
+                continue
             else:
-                txt = getattr(sn, "text", None)
-                parts.append(txt if txt else str(sn))
-
-        text = " ".join(p for p in parts if p).strip()
-        return text
-
-    except TranscriptsDisabled:
-        raise HTTPException(status_code=400, detail="Transcript is disabled for this video.")
-    except NoTranscriptFound:
-        raise HTTPException(status_code=404, detail="No transcript found.")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Transcript fetch error: {e}")
-
+                raise HTTPException(status_code=500, detail=f"Transcript fetch error: {e}")
+    
+    # If all retries fail, raise a final exception
+    raise HTTPException(status_code=500, detail="Transcript fetch failed after multiple retries due to rate limit.")
 
 # ========== Vectorstore ==========
 def get_or_build_vectorstore(video_id: str):
@@ -125,7 +123,6 @@ def get_or_build_vectorstore(video_id: str):
     _trim_cache()
     return vs
 
-
 # ========== Build QA Chain ==========
 def build_chain(vs):
     retriever = vs.as_retriever(search_type="similarity", search_kwargs={"k": TOP_K})
@@ -142,7 +139,6 @@ def build_chain(vs):
     parser = StrOutputParser()
     return parallel | prompt | llm | parser
 
-
 # ========== FastAPI ==========
 app = FastAPI(title="YouTube RAG API", version="1.0.0")
 
@@ -154,16 +150,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 class AskRequest(BaseModel):
     video_id: str
     question: str
 
-
 @app.get("/health")
 def health():
     return {"ok": True}
-
 
 @app.post("/ask")
 def ask(payload: AskRequest):
@@ -172,9 +165,7 @@ def ask(payload: AskRequest):
     answer = chain.invoke(payload.question)
     return {"answer": answer}
 
-
 if __name__ == "__main__":
     import uvicorn
-
     port = int(os.getenv("PORT", 8000))
     uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)
