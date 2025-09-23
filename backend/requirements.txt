@@ -4,8 +4,8 @@ python-dotenv==1.0.1
 youtube-transcript-api==0.6.2
 langchain==0.3.0
 langchain-core==0.3.0
-langchain-text-splitters==0.3.0  # UPDATED to a compatible version
-langchain-community==0.2.12
+langchain-text-splitters==0.3.0
+langchain-community==0.2.13  # UPDATED to a compatible version
 langchain-groq==0.2.0
 langchain-cohere==0.3.0
 pydantic==2.8.2
