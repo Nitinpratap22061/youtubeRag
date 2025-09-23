@@ -15,7 +15,7 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain.schema import Document
 from pinecone import Pinecone as PineconeClient
 
-
+# Load environment
 load_dotenv()
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 COHERE_API_KEY = os.getenv("COHERE_API_KEY")
@@ -25,17 +25,18 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 if not GROQ_API_KEY:
     raise RuntimeError("GROQ_API_KEY missing. Set it in .env")
 
-EMBED_MODEL = os.getenv("EMBED_MODEL", "embed-english-v3.0") 
+EMBED_MODEL = os.getenv("EMBED_MODEL", "embed-english-v3.0")
 GROQ_MODEL = os.getenv("GROQ_MODEL", "llama3-8b-8192")
 CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "1000"))
 CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "200"))
 TOP_K = int(os.getenv("TOP_K", "4"))
 MAX_CACHE = int(os.getenv("MAX_CACHE", "16"))
 
-
+# Embeddings + LLM
 embeddings = CohereEmbeddings(model=EMBED_MODEL, cohere_api_key=COHERE_API_KEY)
 llm = ChatGroq(groq_api_key=GROQ_API_KEY, model=GROQ_MODEL, temperature=0.2)
 
+# Prompt
 prompt = PromptTemplate(
     template="""You are a helpful assistant.
 Answer ONLY from the provided transcript context.
@@ -54,20 +55,18 @@ index = pc.Index(PINECONE_INDEX)
 # In-memory cache of Pinecone vectorstore per video
 _vector_cache: Dict[str, Dict[str, Any]] = {}
 
-
 def _trim_cache():
+    """Keep cache size under MAX_CACHE"""
     if len(_vector_cache) <= MAX_CACHE:
         return
     oldest = sorted(_vector_cache.items(), key=lambda kv: kv[1]["at"])[0][0]
     _vector_cache.pop(oldest, None)
 
-
-
-
 def fetch_transcript_text(video_id: str) -> str:
+    """Fetch transcript text for a given YouTube video ID"""
     try:
-        ytt_api = YouTubeTranscriptApi()
-        snippets = ytt_api.fetch(video_id)
+        # FIX: use correct method
+        snippets = YouTubeTranscriptApi.get_transcript(video_id)
 
         parts = []
         for sn in snippets:
@@ -75,15 +74,10 @@ def fetch_transcript_text(video_id: str) -> str:
                 parts.append(sn.get("text", ""))
             else:
                 txt = getattr(sn, "text", None)
-                if txt is None:
-                    try:
-                        parts.append(sn.get("text", ""))
-                    except Exception:
-                        parts.append(str(sn))
-                else:
-                    parts.append(txt)
-        text = " ".join(p for p in parts if p)
-        return text.strip()
+                parts.append(txt if txt else str(sn))
+
+        text = " ".join(p for p in parts if p).strip()
+        return text
     except TranscriptsDisabled:
         raise HTTPException(status_code=400, detail="Transcript is disabled for this video.")
     except NoTranscriptFound:
@@ -91,9 +85,8 @@ def fetch_transcript_text(video_id: str) -> str:
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Transcript fetch error: {e}")
 
-
-
 def get_or_build_vectorstore(video_id: str):
+    """Retrieve or build Pinecone vectorstore for given video"""
     now = time.time()
     if video_id in _vector_cache:
         _vector_cache[video_id]["at"] = now
@@ -103,7 +96,9 @@ def get_or_build_vectorstore(video_id: str):
     if not transcript:
         raise HTTPException(status_code=404, detail="Empty transcript.")
 
-    splitter = RecursiveCharacterTextSplitter(chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP)
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP
+    )
     chunks = splitter.split_text(transcript)
     docs = [Document(page_content=c) for c in chunks]
 
@@ -112,9 +107,8 @@ def get_or_build_vectorstore(video_id: str):
     _trim_cache()
     return vs
 
-
-
 def build_chain(vs):
+    """Build retrieval + LLM chain"""
     retriever = vs.as_retriever(search_type="similarity", search_kwargs={"k": TOP_K})
 
     def _format(docs):
@@ -127,8 +121,7 @@ def build_chain(vs):
     parser = StrOutputParser()
     return parallel | prompt | llm | parser
 
-
-
+# FastAPI app
 app = FastAPI(title="YouTube RAG API", version="1.0.0")
 app.add_middleware(
     CORSMiddleware,
@@ -138,16 +131,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 class AskRequest(BaseModel):
     video_id: str
     question: str
 
-
 @app.get("/health")
 def health():
     return {"ok": True}
-
 
 @app.post("/ask")
 def ask(payload: AskRequest):
@@ -156,8 +146,7 @@ def ask(payload: AskRequest):
     answer = chain.invoke(payload.question)
     return {"answer": answer}
 
-
 if __name__ == "__main__":
-    import uvicorn, os
+    import uvicorn
     port = int(os.getenv("PORT", 8000))
     uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)
