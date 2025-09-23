@@ -13,4 +13,4 @@ sentence-transformers
 faiss-cpu
 pydantic
 openrouter
-pinecone-client
+pinecone
